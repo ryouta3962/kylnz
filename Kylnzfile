@@ -1,29 +1,19 @@
-vmid: "qga-test"
-vmname: "QGA Architecture VM"
-base_image: "/home/kenjiro/kylnz/.kylnz/base/base.qcow2" # ← 先ほど作ったbase.qcow2の絶対パス
+vmid: "qga-auto-mount-test"
+vmname: "Auto Mount VM"
+base_image: "/home/kenjiro/kylnz/.kylnz/base/base.qcow2"
 memory: 512
 output_dir: "./.kylnz/layers"
 
+# 自動マウント設定
+data_disk: "./.kylnz/data/persistence.qcow2"
+data_mount: "/mnt/my_persistent_data" # 好きな場所を指定
+
 steps:
   - type: "run"
-    command: "apk update"
-  - type: "run"
-    command: "apk add vim curl nginx"
-  - type: "run"
-    command: "echo '<h1>Hello Kylnz with QGA!</h1>' > /var/www/localhost/htdocs/index.html"
-  - type: "run"
-    command: "echo '<h1>Hello Kylnz with QGA!</h1>' > /var/www/localhost/htdocs/index.html"
-
-  # ▼▼ ここから下を追記 ▼▼
-  
-  # 1. ユーザーの作成 (-D オプションで対話プロンプトをスキップ)
-  - type: "run"
-    command: "adduser -D kenjiro"
+    command: "apk update && apk add e2fsprogs" # mkfsのために必要
     
-  # 2. パスワードの設定 (パイプで chpasswd に流し込む)
   - type: "run"
-    command: "echo 'kenjiro:mypassword' | chpasswd"
+    command: "echo 'It works!' > /mnt/my_persistent_data/success.txt"
 
-  # 3. (おまけ) sudo をインストールして kenjiro に権限を付与する
   - type: "run"
-    command: "apk add sudo && adduser kenjiro wheel && sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' /etc/sudoers"
+    command: "ls -l /mnt/my_persistent_data/success.txt"

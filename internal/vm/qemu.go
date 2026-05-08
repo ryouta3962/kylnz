@@ -9,23 +9,32 @@ import (
 	"time"
 )
 
-// 引数をシンプルにしました
-func StartVM(diskPath string, memory int, monitorSock string, qgaSock string) (*exec.Cmd, error) {
+// ★ 引数に dataDiskPath を追加
+func StartVM(diskPath string, dataDiskPath string, memory int, monitorSock string, qgaSock string) (*exec.Cmd, error) {
 	args := []string{
 		"-enable-kvm",
 		"-m", fmt.Sprintf("%d", memory),
+		// 1つ目のディスク (OS領域 / dev/vda)
 		"-drive", fmt.Sprintf("file=%s,if=none,id=hd0,format=qcow2", diskPath),
 		"-device", "virtio-blk-pci,drive=hd0",
 
-		// QEMU Monitor (スナップショット用)
+		// QEMU Monitor
 		"-monitor", fmt.Sprintf("unix:%s,server,nowait", monitorSock),
 
-		// ★追加: QEMU Guest Agent用の仮想シリアルケーブルとソケット
+		// QGA
 		"-chardev", fmt.Sprintf("socket,path=%s,server=on,wait=off,id=qga0", qgaSock),
 		"-device", "virtio-serial",
 		"-device", "virtserialport,chardev=qga0,name=org.qemu.guest_agent.0",
 
 		"-display", "none",
+	}
+
+	// ★ データディスクが指定されている場合は、2つ目のディスク (dev/vdb) として追加
+	if dataDiskPath != "" {
+		args = append(args,
+			"-drive", fmt.Sprintf("file=%s,if=none,id=hd1,format=qcow2", dataDiskPath),
+			"-device", "virtio-blk-pci,drive=hd1",
+		)
 	}
 
 	cmd := exec.Command("qemu-system-x86_64", args...)

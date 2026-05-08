@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"time"
+	"os"
 )
 
 type QGAClient struct {
@@ -137,4 +138,54 @@ func (c *QGAClient) sendCommand(execute string, args map[string]interface{}) (ma
 	}
 
 	return resp, nil
+}
+
+// WriteFile はホストのファイルをVM内の指定パスに書き込みます
+func (c *QGAClient) WriteFile(hostPath, guestPath string) error {
+        // 1. VM側でファイルをバイナリ書き込みモード("wb")で開く
+        openResp, err := c.sendCommand("guest-file-open", map[string]interface{}{
+                "path": guestPath,
+                "mode": "wb",
+        })
+        if err != nil {
+                return fmt.Errorf("failed to open file on guest: %w", err)
+        }
+
+        // QGAから返されたファイルハンドル(ID)を取得
+        handleFloat, ok := openResp["return"].(float64)
+        if !ok {
+                return fmt.Errorf("invalid file handle returned")
+        }
+        handle := int(handleFloat)
+
+        // 必ずファイルを閉じるようにdeferで設定
+        defer c.sendCommand("guest-file-close", map[string]interface{}{
+                "handle": handle,
+        })
+
+        // 2. ホストのファイルを読み込む
+        data, err := os.ReadFile(hostPath)
+        if err != nil {
+                return fmt.Errorf("failed to read host file: %w", err)
+        }
+
+        // 3. チャンクに分割して送信 (例: 48KBずつ)
+        chunkSize := 48 * 1024
+        for i := 0; i < len(data); i += chunkSize {
+                end := i + chunkSize
+                if end > len(data) {
+                        end = len(data)
+                }
+
+                b64Data := base64.StdEncoding.EncodeToString(data[i:end])
+                _, err = c.sendCommand("guest-file-write", map[string]interface{}{
+                        "handle":  handle,
+                        "buf-b64": b64Data,
+                })
+                if err != nil {
+                        return fmt.Errorf("failed to write chunk to guest: %w", err)
+                }
+        }
+
+        return nil
 }
